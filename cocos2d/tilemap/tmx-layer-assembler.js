@@ -42,18 +42,18 @@ const RenderFlow = require('../core/renderer/render-flow');
 
 let _mat4_temp = cc.mat4();
 let _vec3_temp = cc.v3();
-let _leftDown = {row:0, col:0};
-let _uva = {x:0, y:0};
-let _uvb = {x:0, y:0};
-let _uvc = {x:0, y:0};
-let _uvd = {x:0, y:0};
+let _leftDown = { row: 0, col: 0 };
+let _uva = { x: 0, y: 0 };
+let _uvb = { x: 0, y: 0 };
+let _uvc = { x: 0, y: 0 };
+let _uvd = { x: 0, y: 0 };
 
 let _renderData = null, _ia = null, _fillGrids = 0,
     _vfOffset = 0, _moveX = 0, _moveY = 0, _layerMat = null,
-    _renderer = null, _renderDataList = null, _buffer = null, 
+    _renderer = null, _renderDataList = null, _buffer = null,
     _curMaterial = null, _comp = null, _vbuf = null, _uintbuf = null;
 
-function _visitUserNode (userNode) {
+function _visitUserNode(userNode) {
     if (CC_NATIVERENDERER) return;
     userNode._updateLocalMatrix();
     Mat4.mul(userNode._worldMatrix, _layerMat, userNode._matrix);
@@ -62,7 +62,7 @@ function _visitUserNode (userNode) {
     userNode._renderFlag |= RenderFlow.FLAG_BREAK_FLOW;
 }
 
-function _flush () {
+function _flush() {
     if (_ia._count === 0) {
         return;
     }
@@ -88,7 +88,7 @@ function _flush () {
     _renderData.material = _curMaterial;
 }
 
-function _renderNodes (nodeRow, nodeCol) {
+function _renderNodes(nodeRow, nodeCol) {
     let nodesInfo = _comp._getNodesByRowCol(nodeRow, nodeCol);
     if (!nodesInfo || nodesInfo.count == 0) return;
     let nodesList = nodesInfo.list;
@@ -98,7 +98,7 @@ function _renderNodes (nodeRow, nodeCol) {
 
     _renderer.worldMatDirty++;
     // begin to render nodes
-    for (; newIdx < nodesInfo.count; ) {
+    for (; newIdx < nodesInfo.count;) {
         let dataComp = nodesList[oldIdx];
         oldIdx++;
         if (!dataComp) continue;
@@ -124,7 +124,7 @@ texture coordinate
 a b 
 c d
 */
-function _flipTexture (inGrid, gid) {
+function _flipTexture(inGrid, gid) {
     _uva.x = inGrid.l;
     _uva.y = inGrid.t;
     _uvb.x = inGrid.r;
@@ -167,16 +167,16 @@ function _flipTexture (inGrid, gid) {
 };
 
 export default class TmxAssembler extends Assembler {
-    updateRenderData (comp) {
+    updateRenderData(comp) {
         if (!comp._renderDataList) {
             comp._buffer = new cc.TiledMapBuffer(renderer._handle, vfmtPosUvColor);
             comp._renderDataList = new cc.TiledMapRenderDataList();
         }
     }
 
-    fillBuffers (comp, renderer) {
+    fillBuffers(comp, renderer) {
         let vertices = comp._vertices;
-        if (vertices.length === 0 ) return;
+        if (vertices.length === 0) return;
 
         comp._updateCulling();
 
@@ -194,9 +194,9 @@ export default class TmxAssembler extends Assembler {
 
             let leftDown, rightTop;
             if (comp._enableCulling) {
-               let cullingRect = comp._cullingRect;
-               leftDown = cullingRect.leftDown;
-               rightTop = cullingRect.rightTop;
+                let cullingRect = comp._cullingRect;
+                leftDown = cullingRect.leftDown;
+                rightTop = cullingRect.rightTop;
             } else {
                 leftDown = _leftDown;
                 rightTop = comp._rightTop;
@@ -277,7 +277,7 @@ export default class TmxAssembler extends Assembler {
 
     // rowMoveDir is -1 or 1, -1 means decrease, 1 means increase
     // colMoveDir is -1 or 1, -1 means decrease, 1 means increase
-    traverseGrids (leftDown, rightTop, rowMoveDir, colMoveDir) {
+    traverseGrids(leftDown, rightTop, rowMoveDir, colMoveDir) {
         _renderDataList.reset();
 
         // show nothing
@@ -298,7 +298,7 @@ export default class TmxAssembler extends Assembler {
         let tiles = _comp._tiles;
         let texIdToMatIdx = _comp._texIdToMatIndex;
         let mats = _comp._materials;
-    
+
         let vertices = _comp._vertices;
         let rowData, col, cols, row, rows, colData, tileSize, grid = null, gid = 0;
         let left = 0, bottom = 0, right = 0, top = 0; // x, y
@@ -433,7 +433,7 @@ export default class TmxAssembler extends Assembler {
         }
     }
 
-    fillByTiledNode (tiledNode, vbuf, uintbuf, left, right, top, bottom) {
+    fillByTiledNode(tiledNode, vbuf, uintbuf, left, right, top, bottom) {
         tiledNode._updateLocalMatrix();
         Mat4.copy(_mat4_temp, tiledNode._matrix);
         Vec3.set(_vec3_temp, -(left + _moveX), -(bottom + _moveY), 0);
