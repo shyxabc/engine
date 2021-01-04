@@ -211,24 +211,29 @@ export default class TmxAssembler extends Assembler {
 
             _buffer.request(maxGrids * 4, maxGrids * 6);
 
-            switch (comp._renderOrder) {
-                // left top to right down, col add, row sub, 
-                case RenderOrder.RightDown:
-                    this.traverseGrids(leftDown, rightTop, -1, 1);
-                    break;
-                // right top to left down, col sub, row sub
-                case RenderOrder.LeftDown:
-                    this.traverseGrids(leftDown, rightTop, -1, -1);
-                    break;
-                // left down to right up, col add, row add
-                case RenderOrder.RightUp:
-                    this.traverseGrids(leftDown, rightTop, 1, 1);
-                    break;
-                // right down to left up, col sub, row add
-                case RenderOrder.LeftUp:
-                    this.traverseGrids(leftDown, rightTop, 1, -1);
-                    break;
+            if (comp._layerOrientation == TiledMap.Orientation.HEX) {
+                this.traverseGrids(leftDown, rightTop, -1, 2);
+            } else {
+                switch (comp._renderOrder) {
+                    // left top to right down, col add, row sub, 
+                    case RenderOrder.RightDown:
+                        this.traverseGrids(leftDown, rightTop, -1, 1);
+                        break;
+                    // right top to left down, col sub, row sub
+                    case RenderOrder.LeftDown:
+                        this.traverseGrids(leftDown, rightTop, -1, -1);
+                        break;
+                    // left down to right up, col add, row add
+                    case RenderOrder.RightUp:
+                        this.traverseGrids(leftDown, rightTop, 1, 1);
+                        break;
+                    // right down to left up, col sub, row add
+                    case RenderOrder.LeftUp:
+                        this.traverseGrids(leftDown, rightTop, 1, -1);
+                        break;
+                }
             }
+
             comp._setCullingDirty(false);
             comp._setUserNodeDirty(false);
 
@@ -319,105 +324,107 @@ export default class TmxAssembler extends Assembler {
             colNodesCount = _comp._getNodesCountByRow(row);
             checkColRange = (colNodesCount == 0 && rowData != undefined);
 
-            // limit min col and max col
-            if (colMoveDir == 1) {
-                col = checkColRange && leftDown.col < rowData.minCol ? rowData.minCol : leftDown.col;
-                cols = checkColRange && rightTop.col > rowData.maxCol ? rowData.maxCol : rightTop.col;
-            } else {
-                col = checkColRange && rightTop.col > rowData.maxCol ? rowData.maxCol : rightTop.col;
-                cols = checkColRange && leftDown.col < rowData.minCol ? rowData.minCol : leftDown.col;
-            }
-
-            // traverse col
-            for (; (cols - col) * colMoveDir >= 0; col += colMoveDir) {
-                colData = rowData && rowData[col];
-                if (!colData) {
-                    // only render users nodes because map data is empty
-                    if (colNodesCount > 0) _renderNodes(row, col);
-                    continue;
+            for (let colOffset = Math.abs(colMoveDir) - 1; colOffset >= 0; colOffset--) {
+                // limit min col and max col
+                if (colMoveDir > 0) {
+                    col = (checkColRange && leftDown.col < rowData.minCol ? rowData.minCol : leftDown.col) + colOffset;
+                    cols = checkColRange && rightTop.col > rowData.maxCol ? rowData.maxCol : rightTop.col;
+                } else {
+                    col = (checkColRange && rightTop.col > rowData.maxCol ? rowData.maxCol : rightTop.col) - colOffset;
+                    cols = checkColRange && leftDown.col < rowData.minCol ? rowData.minCol : leftDown.col;
                 }
 
-                gid = tiles[colData.index];
-                grid = texGrids[(gid & FLIPPED_MASK) >>> 0];
-                if (!grid) continue;
+                // traverse col
+                for (; (cols - col) * colMoveDir >= 0; col += colMoveDir) {
+                    colData = rowData && rowData[col];
+                    if (!colData) {
+                        // only render users nodes because map data is empty
+                        if (colNodesCount > 0) _renderNodes(row, col);
+                        continue;
+                    }
 
-                // check init or new material
-                if (curTexIdx !== grid.texId) {
-                    // need flush
-                    if (curTexIdx !== -1) {
+                    gid = tiles[colData.index];
+                    grid = texGrids[(gid & FLIPPED_MASK) >>> 0];
+                    if (!grid) continue;
+
+                    // check init or new material
+                    if (curTexIdx !== grid.texId) {
+                        // need flush
+                        if (curTexIdx !== -1) {
+                            _flush();
+                        }
+                        // update material
+                        curTexIdx = grid.texId;
+                        matIdx = texIdToMatIdx[curTexIdx];
+                        _curMaterial = mats[matIdx];
+                        _renderData.material = _curMaterial;
+                    }
+                    if (!_curMaterial) continue;
+
+                    // calc rect vertex
+                    left = colData.left - _moveX;
+                    bottom = colData.bottom - _moveY;
+                    tileSize = grid.tileset._tileSize;
+                    right = left + tileSize.width;
+                    top = bottom + tileSize.height;
+
+                    // begin to fill vertex buffer
+                    tiledNode = tiledTiles[colData.index];
+                    if (!tiledNode) {
+                        // tl
+                        _vbuf[_vfOffset] = left;
+                        _vbuf[_vfOffset + 1] = top;
+                        _uintbuf[_vfOffset + 4] = color;
+
+                        // bl
+                        _vbuf[_vfOffset + 5] = left;
+                        _vbuf[_vfOffset + 6] = bottom;
+                        _uintbuf[_vfOffset + 9] = color;
+
+                        // tr
+                        _vbuf[_vfOffset + 10] = right;
+                        _vbuf[_vfOffset + 11] = top;
+                        _uintbuf[_vfOffset + 14] = color;
+
+                        // br
+                        _vbuf[_vfOffset + 15] = right;
+                        _vbuf[_vfOffset + 16] = bottom;
+                        _uintbuf[_vfOffset + 19] = color;
+                    } else {
+                        this.fillByTiledNode(tiledNode.node, _vbuf, _uintbuf, left, right, top, bottom);
+                    }
+
+                    _flipTexture(grid, gid);
+
+                    // tl -> a
+                    _vbuf[_vfOffset + 2] = _uva.x;
+                    _vbuf[_vfOffset + 3] = _uva.y;
+
+                    // bl -> c
+                    _vbuf[_vfOffset + 7] = _uvc.x;
+                    _vbuf[_vfOffset + 8] = _uvc.y;
+
+                    // tr -> b
+                    _vbuf[_vfOffset + 12] = _uvb.x;
+                    _vbuf[_vfOffset + 13] = _uvb.y;
+
+                    // br -> d
+                    _vbuf[_vfOffset + 17] = _uvd.x;
+                    _vbuf[_vfOffset + 18] = _uvd.y;
+
+                    // modify buffer all kinds of offset
+                    _vfOffset += 20;
+                    _buffer.adjust(4, 6);
+                    _ia._count += 6;
+                    _fillGrids++;
+
+                    // check render users node
+                    if (colNodesCount > 0) _renderNodes(row, col);
+
+                    // vertices count exceed 66635, buffer must be switched
+                    if (_fillGrids >= MaxGridsLimit) {
                         _flush();
                     }
-                    // update material
-                    curTexIdx = grid.texId;
-                    matIdx = texIdToMatIdx[curTexIdx];
-                    _curMaterial = mats[matIdx];
-                    _renderData.material = _curMaterial;
-                }
-                if (!_curMaterial) continue;
-
-                // calc rect vertex
-                left = colData.left - _moveX;
-                bottom = colData.bottom - _moveY;
-                tileSize = grid.tileset._tileSize;
-                right = left + tileSize.width;
-                top = bottom + tileSize.height;
-
-                // begin to fill vertex buffer
-                tiledNode = tiledTiles[colData.index];
-                if (!tiledNode) {
-                    // tl
-                    _vbuf[_vfOffset] = left;
-                    _vbuf[_vfOffset + 1] = top;
-                    _uintbuf[_vfOffset + 4] = color;
-
-                    // bl
-                    _vbuf[_vfOffset + 5] = left;
-                    _vbuf[_vfOffset + 6] = bottom;
-                    _uintbuf[_vfOffset + 9] = color;
-
-                    // tr
-                    _vbuf[_vfOffset + 10] = right;
-                    _vbuf[_vfOffset + 11] = top;
-                    _uintbuf[_vfOffset + 14] = color;
-
-                    // br
-                    _vbuf[_vfOffset + 15] = right;
-                    _vbuf[_vfOffset + 16] = bottom;
-                    _uintbuf[_vfOffset + 19] = color;
-                } else {
-                    this.fillByTiledNode(tiledNode.node, _vbuf, _uintbuf, left, right, top, bottom);
-                }
-
-                _flipTexture(grid, gid);
-
-                // tl -> a
-                _vbuf[_vfOffset + 2] = _uva.x;
-                _vbuf[_vfOffset + 3] = _uva.y;
-
-                // bl -> c
-                _vbuf[_vfOffset + 7] = _uvc.x;
-                _vbuf[_vfOffset + 8] = _uvc.y;
-
-                // tr -> b
-                _vbuf[_vfOffset + 12] = _uvb.x;
-                _vbuf[_vfOffset + 13] = _uvb.y;
-
-                // br -> d
-                _vbuf[_vfOffset + 17] = _uvd.x;
-                _vbuf[_vfOffset + 18] = _uvd.y;
-
-                // modify buffer all kinds of offset
-                _vfOffset += 20;
-                _buffer.adjust(4, 6);
-                _ia._count += 6;
-                _fillGrids++;
-
-                // check render users node
-                if (colNodesCount > 0) _renderNodes(row, col);
-
-                // vertices count exceed 66635, buffer must be switched
-                if (_fillGrids >= MaxGridsLimit) {
-                    _flush();
                 }
             }
         }
