@@ -211,27 +211,23 @@ export default class TmxAssembler extends Assembler {
 
             _buffer.request(maxGrids * 4, maxGrids * 6);
 
-            if (comp._layerOrientation == TiledMap.Orientation.HEX) {
-                this.traverseGrids(leftDown, rightTop, -1, 2);
-            } else {
-                switch (comp._renderOrder) {
-                    // left top to right down, col add, row sub, 
-                    case RenderOrder.RightDown:
-                        this.traverseGrids(leftDown, rightTop, -1, 1);
-                        break;
-                    // right top to left down, col sub, row sub
-                    case RenderOrder.LeftDown:
-                        this.traverseGrids(leftDown, rightTop, -1, -1);
-                        break;
-                    // left down to right up, col add, row add
-                    case RenderOrder.RightUp:
-                        this.traverseGrids(leftDown, rightTop, 1, 1);
-                        break;
-                    // right down to left up, col sub, row add
-                    case RenderOrder.LeftUp:
-                        this.traverseGrids(leftDown, rightTop, 1, -1);
-                        break;
-                }
+            switch (comp._renderOrder) {
+                // left top to right down, col add, row sub, 
+                case RenderOrder.RightDown:
+                    this.traverseGrids(leftDown, rightTop, -1, 1);
+                    break;
+                // right top to left down, col sub, row sub
+                case RenderOrder.LeftDown:
+                    this.traverseGrids(leftDown, rightTop, -1, -1);
+                    break;
+                // left down to right up, col add, row add
+                case RenderOrder.RightUp:
+                    this.traverseGrids(leftDown, rightTop, 1, 1);
+                    break;
+                // right down to left up, col sub, row add
+                case RenderOrder.LeftUp:
+                    this.traverseGrids(leftDown, rightTop, 1, -1);
+                    break;
             }
 
             comp._setCullingDirty(false);
@@ -303,6 +299,8 @@ export default class TmxAssembler extends Assembler {
         let tiles = _comp._tiles;
         let texIdToMatIdx = _comp._texIdToMatIndex;
         let mats = _comp._materials;
+        let staggerIndex = _comp._staggerIndex;
+        let renderBatchCount = _comp._layerOrientation == TiledMap.Orientation.HEX && _comp._staggerAxis == TiledMap.StaggerAxis.STAGGERAXIS_X ? 2 : 1;
 
         let vertices = _comp._vertices;
         let rowData, col, cols, row, rows, colData, tileSize, grid = null, gid = 0;
@@ -324,18 +322,22 @@ export default class TmxAssembler extends Assembler {
             colNodesCount = _comp._getNodesCountByRow(row);
             checkColRange = (colNodesCount == 0 && rowData != undefined);
 
-            for (let colOffset = Math.abs(colMoveDir) - 1; colOffset >= 0; colOffset--) {
+            for (let index = 0; index < renderBatchCount; index++) {
+            // for (let colOffset = Math.abs(colMoveDir) - 1; colOffset >= 0; colOffset--) {
                 // limit min col and max col
-                if (colMoveDir > 0) {
-                    col = (checkColRange && leftDown.col < rowData.minCol ? rowData.minCol : leftDown.col) + colOffset;
+                if (colMoveDir == 1) {
+                    col = checkColRange && leftDown.col < rowData.minCol ? rowData.minCol : leftDown.col;
                     cols = checkColRange && rightTop.col > rowData.maxCol ? rowData.maxCol : rightTop.col;
                 } else {
-                    col = (checkColRange && rightTop.col > rowData.maxCol ? rowData.maxCol : rightTop.col) - colOffset;
+                    col = checkColRange && rightTop.col > rowData.maxCol ? rowData.maxCol : rightTop.col;
                     cols = checkColRange && leftDown.col < rowData.minCol ? rowData.minCol : leftDown.col;
                 }
 
                 // traverse col
                 for (; (cols - col) * colMoveDir >= 0; col += colMoveDir) {
+                    if (col % renderBatchCount == (index + staggerIndex + 1) % renderBatchCount) {
+                        continue;
+                    }
                     colData = rowData && rowData[col];
                     if (!colData) {
                         // only render users nodes because map data is empty
