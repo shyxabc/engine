@@ -323,7 +323,6 @@ export default class TmxAssembler extends Assembler {
             checkColRange = (colNodesCount == 0 && rowData != undefined);
 
             for (let index = 0; index < renderBatchCount; index++) {
-            // for (let colOffset = Math.abs(colMoveDir) - 1; colOffset >= 0; colOffset--) {
                 // limit min col and max col
                 if (colMoveDir == 1) {
                     col = checkColRange && leftDown.col < rowData.minCol ? rowData.minCol : leftDown.col;
@@ -335,7 +334,7 @@ export default class TmxAssembler extends Assembler {
 
                 // traverse col
                 for (; (cols - col) * colMoveDir >= 0; col += colMoveDir) {
-                    if (col % renderBatchCount == (index + staggerIndex + 1) % renderBatchCount) {
+                    if (col % renderBatchCount != (index + staggerIndex) % renderBatchCount) {
                         continue;
                     }
                     colData = rowData && rowData[col];
