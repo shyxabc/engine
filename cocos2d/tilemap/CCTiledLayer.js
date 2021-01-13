@@ -384,6 +384,10 @@ let TiledLayer = cc.Class({
         this._layerName = layerName;
     },
 
+    getHexSideLength() {
+        return this._hexSideLength;
+    },
+
     /**
      * !#en Return the value for the specific property name.
      * !#zh 获取指定属性名的值。
